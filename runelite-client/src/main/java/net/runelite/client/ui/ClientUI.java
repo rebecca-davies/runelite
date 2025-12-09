@@ -311,7 +311,7 @@ public class ClientUI
 				return false;
 			}
 
-			frame.setTitle("BecLite2 - " + name);
+			frame.setTitle("PuppyLite - " + name);
 			return true;
 		});
 	}
@@ -336,7 +336,7 @@ public class ClientUI
 				OSXFullScreenAdapter.install(frame);
 			}
 
-			frame.setTitle("BecLite2");
+			frame.setTitle("PuppyLite");
 			frame.setIconImages(Arrays.asList(ICON_128, ICON_16));
 			frame.setLocationRelativeTo(frame.getOwner());
 			frame.setResizable(true);
@@ -1193,12 +1193,12 @@ public class ClientUI
 
 			if (player != null && player.getName() != null)
 			{
-				frame.setTitle("BecLite2 - " + player.getName());
+				frame.setTitle("PuppyLite - " + player.getName());
 			}
 		}
 		else
 		{
-			frame.setTitle("BecLite2");
+			frame.setTitle("PuppyLite");
 		}
 
 		if (frame.isAlwaysOnTopSupported())

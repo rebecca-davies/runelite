@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Liam Edwards <http://github.com/Spedwards>
+ * Copyright (c) 2026, Adam <Adam@sigterm.info>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,51 +22,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package net.runelite.client.plugins.worldhopper;
+package net.runelite.client.ui.overlay;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import net.runelite.http.api.worlds.WorldRegion;
-
-@RequiredArgsConstructor
-enum RegionFilterMode
+enum OverlayOriginX
 {
-	AUSTRALIA(WorldRegion.AUSTRALIA),
-	GERMANY(WorldRegion.GERMANY),
-	UNITED_KINGDOM(WorldRegion.UNITED_KINGDOM)
-		{
-			@Override
-			public String toString()
-			{
-				return "U.K.";
-			}
-		},
-	UNITED_STATES(WorldRegion.UNITED_STATES_OF_AMERICA)
-		{
-			@Override
-			public String toString()
-			{
-				return "USA";
-			}
-		},
-	BRAZIL(WorldRegion.BRAZIL),
-	JAPAN(WorldRegion.JAPAN),
-	SINGAPORE(WorldRegion.SINGAPORE),
-	SOUTH_AFRICA(WorldRegion.SOUTH_AFRICA),
-	;
-
-	@Getter
-	private final WorldRegion region;
-
-	static RegionFilterMode of(WorldRegion region)
-	{
-		for (var rfm : values())
-		{
-			if (rfm.region == region)
-			{
-				return rfm;
-			}
-		}
-		throw new IllegalArgumentException();
-	}
+	LEFT,
+	CENTER,
+	RIGHT,
 }

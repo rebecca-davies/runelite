@@ -58,6 +58,9 @@ import static org.lwjgl.opengl.GL33C.*;
 @Slf4j
 class TextureInjector
 {
+	private static final int TEX_DIM = 128;   // matches TextureManager.TEXTURE_SIZE
+	private static final int MIP_LEVELS = 8;  // matches glTexStorage3D level count (128..1)
+
 	private static boolean ready = false;
 	private static Unsafe unsafe;
 	private static Field fPixels;         // int[] pixel field on Texture
@@ -337,8 +340,8 @@ class TextureInjector
 
 	private static void uploadToGpu(int texArrayId, int slot, int[] srcPixels)
 	{
-		byte[] rgba = new byte[128 * 128 * 4];
-		for (int i = 0; i < srcPixels.length && i < 128 * 128; i++)
+		byte[] rgba = new byte[TEX_DIM * TEX_DIM * 4];
+		for (int i = 0; i < srcPixels.length && i < TEX_DIM * TEX_DIM; i++)
 		{
 			int rgb = srcPixels[i];
 			if (rgb != 0)
@@ -349,12 +352,61 @@ class TextureInjector
 				rgba[i * 4 + 3] = (byte) 0xFF;
 			}
 		}
-		ByteBuffer buf = ByteBuffer.allocateDirect(rgba.length);
-		buf.put(rgba);
-		buf.flip();
+
 		glBindTexture(GL_TEXTURE_2D_ARRAY, texArrayId);
-		glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, slot, 128, 128, 1,
-			GL_RGBA, GL_UNSIGNED_BYTE, buf);
+
+		// The GPU texture array is allocated with a full mip chain and uses
+		// NEAREST_MIPMAP_LINEAR minification, so zoomed-out (minified) faces sample
+		// the coarser mip levels. RuneLite only runs glGenerateMipmap once at array
+		// init, when our slot still held the donor texture — so writing level 0 alone
+		// leaves levels 1..N showing the donor ("door") texture from far away.
+		// Upload every mip level from our own downsampled pixels to fix that.
+		int dim = TEX_DIM;
+		byte[] level = rgba;
+		for (int lvl = 0; lvl < MIP_LEVELS; lvl++)
+		{
+			ByteBuffer buf = ByteBuffer.allocateDirect(level.length);
+			buf.put(level);
+			buf.flip();
+			glTexSubImage3D(GL_TEXTURE_2D_ARRAY, lvl, 0, 0, slot, dim, dim, 1,
+				GL_RGBA, GL_UNSIGNED_BYTE, buf);
+
+			if (dim > 1)
+			{
+				level = downsample(level, dim);
+				dim >>= 1;
+			}
+		}
+	}
+
+	/**
+	 * Box-filters an RGBA image (dim x dim, tightly packed) down to (dim/2 x dim/2)
+	 * by averaging each 2x2 texel block.
+	 */
+	static byte[] downsample(byte[] src, int dim)
+	{
+		int half = dim >> 1;
+		byte[] dst = new byte[half * half * 4];
+		for (int y = 0; y < half; y++)
+		{
+			for (int x = 0; x < half; x++)
+			{
+				int sx = x << 1;
+				int sy = y << 1;
+				int tl = (sy * dim + sx) * 4;
+				int tr = (sy * dim + sx + 1) * 4;
+				int bl = ((sy + 1) * dim + sx) * 4;
+				int br = ((sy + 1) * dim + sx + 1) * 4;
+				int d = (y * half + x) * 4;
+				for (int c = 0; c < 4; c++)
+				{
+					int sum = (src[tl + c] & 0xFF) + (src[tr + c] & 0xFF)
+						+ (src[bl + c] & 0xFF) + (src[br + c] & 0xFF);
+					dst[d + c] = (byte) ((sum + 2) >> 2);
+				}
+			}
+		}
+		return dst;
 	}
 
 	static int findGpuTextureArrayId(PluginManager pluginManager)

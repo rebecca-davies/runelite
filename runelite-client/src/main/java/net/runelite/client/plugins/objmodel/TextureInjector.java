@@ -48,12 +48,9 @@ import sun.misc.Unsafe; //NOPMD
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
- * Injects PNG textures by EXPANDING the TextureProvider array with cloned
- * Texture objects. Cloning from a real Texture ensures provider.load()
- * doesn't crash during GPU init. After GPU init, we overwrite our slots
- * with the actual PNG pixels via glTexSubImage3D.
- *
- * No existing game textures are touched.
+ * Injects PNG textures by expanding the TextureProvider's Texture array into
+ * unused slots and overwriting those GPU layers with PNG pixels via
+ * glTexSubImage3D. Existing game textures are left untouched.
  */
 @Slf4j
 class TextureInjector
@@ -66,11 +63,16 @@ class TextureInjector
 	private static Field fPixels;         // int[] pixel field on Texture
 	private static Field fProviderArray;  // Texture[] field on TextureProvider
 	private static int originalArraySize;
-	private static List<Field> allTexFields = new ArrayList<>(); // for cloning
+	private static List<Field> allTexFields = new ArrayList<>();
 
 	private final List<Integer> injectedSlots = new ArrayList<>();
 	private final Map<Integer, int[]> pngPixelsMap = new HashMap<>();
 
+	/**
+	 * Discovers the private Texture pixel field and TextureProvider array field
+	 * via reflection, then pre-expands the array to 256 slots. Reflection is
+	 * required because these are internal deob fields with no public accessors.
+	 */
 	static boolean init(TextureProvider provider)
 	{
 		if (ready)
@@ -93,7 +95,7 @@ class TextureInjector
 		Texture[] textures = provider.getTextures();
 		originalArraySize = textures.length;
 
-		// Find a loaded texture for field discovery
+		// Load a real texture to use as a reference for field discovery.
 		Texture sample = null;
 		for (int i = 0; i < textures.length; i++)
 		{
@@ -113,7 +115,7 @@ class TextureInjector
 			return false;
 		}
 
-		// Discover pixel field
+		// Match the field holding the pixel array by reference identity.
 		int[] pixRef = sample.getPixels();
 		Class<?> texClass = sample.getClass();
 		for (Class<?> c = texClass; c != null && c != Object.class; c = c.getSuperclass())
@@ -139,7 +141,7 @@ class TextureInjector
 			}
 		}
 
-		// Discover provider array field
+		// Match the provider's Texture[] field by reference identity.
 		Object texRef = provider.getTextures();
 		for (Class<?> c = provider.getClass(); c != null && c != Object.class; c = c.getSuperclass())
 		{
@@ -169,10 +171,10 @@ class TextureInjector
 			return false;
 		}
 
-		// Pre-expand array to 256 by reusing a real Texture object for new
-		// slots. Using the SAME real texture (not a clone) means provider.load()
-		// works normally — no NPE from stale cache refs after setBrightness.
-		// Our per-frame glTexSubImage3D overwrites the GPU layer with our PNG.
+		// Expand to 256 slots, filling new slots with an existing real Texture.
+		// Reusing a real texture (rather than a clone) keeps provider.load()
+		// working — a clone can leave stale cache refs that NPE after
+		// setBrightness. The extra GPU layers are overwritten per frame.
 		if (textures.length < 256)
 		{
 			try
@@ -180,7 +182,7 @@ class TextureInjector
 				Texture[] expanded = Arrays.copyOf(textures, 256);
 				for (int i = textures.length; i < 256; i++)
 				{
-					expanded[i] = sample; // reuse real texture, not clone
+					expanded[i] = sample;
 				}
 				fProviderArray.set(provider, expanded);
 				log.info("ObjModel/TextureInjector: expanded texture array {} → 256", textures.length);
@@ -202,13 +204,12 @@ class TextureInjector
 		return ready;
 	}
 
-	/** Next available slot in the pre-allocated range */
+	/** Next free slot in the expanded array. */
 	private static int nextSlot = -1;
 
 	/**
-	 * Uses a pre-allocated slot from the expanded array (209-255).
-	 * Sets its pixel field to our PNG. No array expansion needed here
-	 * since init() already expanded to 256.
+	 * Loads and scales a PNG, then points the next free slot's pixel field at it.
+	 * Returns the slot index, or -1 on failure.
 	 */
 	int inject(File pngFile, TextureProvider provider)
 	{
@@ -253,6 +254,10 @@ class TextureInjector
 		return slot;
 	}
 
+	/**
+	 * Shallow-copies a Texture. Uses Unsafe.allocateInstance to skip the
+	 * constructor, since the deob Texture class has no accessible one.
+	 */
 	private static Texture cloneTexture(Texture donor) throws Exception
 	{
 		Texture clone = (Texture) unsafe.allocateInstance(donor.getClass());
@@ -263,9 +268,7 @@ class TextureInjector
 		return clone;
 	}
 
-	/**
-	 * Re-sets pixel references on cloned Textures (CPU side only).
-	 */
+	/** Re-points the injected slots' pixel fields at their PNG data (CPU side only). */
 	void reinjectPixels(TextureProvider provider)
 	{
 		if (injectedSlots.isEmpty())
@@ -290,10 +293,7 @@ class TextureInjector
 		}
 	}
 
-	/**
-	 * Uploads this injector's textures to the GPU array.
-	 * Called from the plugin's centralized GPU handler.
-	 */
+	/** Uploads all injected textures to the GPU texture array. */
 	void uploadToGpuArray(int texArrayId)
 	{
 		for (int slot : injectedSlots)
@@ -307,10 +307,10 @@ class TextureInjector
 	}
 
 	/**
-	 * Forces the GPU plugin to re-init its texture array by deleting the
-	 * current one and setting textureArrayId = -1. On the next frame, the
-	 * GPU plugin will lazy-init with provider.getTextures().length layers
-	 * (now 256 thanks to our expansion). Cloned textures ensure no crash.
+	 * Deletes the GPU plugin's texture array and resets textureArrayId to -1.
+	 * This is needed because the array is allocated once with a fixed layer
+	 * count; forcing a re-init makes it lazily rebuild with the 256 layers the
+	 * expanded provider array now reports.
 	 */
 	static void forceGpuReinit(PluginManager pluginManager, int oldArrayId)
 	{
@@ -355,12 +355,11 @@ class TextureInjector
 
 		glBindTexture(GL_TEXTURE_2D_ARRAY, texArrayId);
 
-		// The GPU texture array is allocated with a full mip chain and uses
-		// NEAREST_MIPMAP_LINEAR minification, so zoomed-out (minified) faces sample
-		// the coarser mip levels. RuneLite only runs glGenerateMipmap once at array
-		// init, when our slot still held the donor texture — so writing level 0 alone
-		// leaves levels 1..N showing the donor ("door") texture from far away.
-		// Upload every mip level from our own downsampled pixels to fix that.
+		// The array uses mipmapped minification, so minified faces sample the
+		// coarser levels. glGenerateMipmap runs only once at array init, while
+		// the slot still held the donor texture, so writing only level 0 leaves
+		// levels 1..N showing the donor texture from far away. Upload every level
+		// from locally downsampled pixels instead.
 		int dim = TEX_DIM;
 		byte[] level = rgba;
 		for (int lvl = 0; lvl < MIP_LEVELS; lvl++)
@@ -452,8 +451,8 @@ class TextureInjector
 		}
 		int count = injectedSlots.size();
 
-		// Restore cloned donor pixels on our used slots (don't shrink array —
-		// the pre-allocated 256 slots stay for the GPU array to remain valid)
+		// Restore donor pixels on the used slots. The array is left at 256 slots
+		// so the GPU texture array stays valid.
 		Texture[] textures = provider.getTextures();
 		Texture donor = null;
 		for (int i = 0; i < Math.min(originalArraySize, textures.length); i++)
@@ -472,7 +471,6 @@ class TextureInjector
 				{
 					try
 					{
-						// Restore to donor pixels so the slot is "clean"
 						fPixels.set(textures[slot], donor.getPixels());
 					}
 					catch (Exception ignored)

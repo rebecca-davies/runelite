@@ -4,9 +4,8 @@ import java.util.WeakHashMap;
 import net.runelite.api.Model;
 
 /**
- * Extended UV data for models exceeding the 255 UV-triangle byte limit.
- * The GPU plugin's SceneUploader checks this before falling back to
- * the standard byte[] textureCoords.
+ * Shared state read by the GPU plugin's SceneUploader and FacePrioritySorter: extended UV
+ * data for models exceeding the 255 UV-triangle byte limit, plus hidden/replaced tracking.
  */
 public class ExtendedUV
 {
@@ -15,17 +14,17 @@ public class ExtendedUV
 	public static final WeakHashMap<Model, int[]> texIdx2 = new WeakHashMap<>();
 	public static final WeakHashMap<Model, int[]> texIdx3 = new WeakHashMap<>();
 
-	/** NPCs that should be fully transparent (set each frame by shouldDraw). */
+	/** NPCs to render fully transparent; repopulated each frame. */
 	public static final java.util.Set<net.runelite.api.NPC> hiddenNpcs =
 		java.util.Collections.newSetFromMap(new WeakHashMap<>());
 
-	/** Object IDs whose drawTemp should be skipped (model replaced). */
+	/** Object IDs whose drawTemp is skipped because the model was replaced. */
 	public static final java.util.Set<Integer> replacedObjectIds = new java.util.HashSet<>();
 
-	/** Set by GpuPlugin.drawTemp before calling uploadSortedModel. */
+	/** Whether the model currently being uploaded should be hidden. */
 	public static boolean currentModelHidden = false;
 
-	/** Check if a renderable belongs to a hidden NPC. */
+
 	public static boolean isHiddenRenderable(net.runelite.api.Renderable r)
 	{
 		return r instanceof net.runelite.api.NPC && hiddenNpcs.contains(r);

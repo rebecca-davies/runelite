@@ -1163,7 +1163,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			return;
 		}
 
-		// Hide dynamic/animated game objects that have been replaced
+		// OBJ model plugin: route replaced dynamic objects through the alpha pass so they can be hidden
 		boolean objectReplaced = net.runelite.client.plugins.objmodel.ExtendedUV
 			.replacedObjectIds.contains(tileObject.getId());
 

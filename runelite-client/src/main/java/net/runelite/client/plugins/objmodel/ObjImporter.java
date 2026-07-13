@@ -71,24 +71,17 @@ import net.runelite.api.JagexColor;
 @Slf4j
 class ObjImporter
 {
-	/** Fallback per-face colour – medium grey, unsaturated. */
+	/** Fallback per-face colour: medium grey. */
 	private static final short DEFAULT_COLOR = JagexColor.packHSL(0, 0, 50);
 
-	// -------------------------------------------------------------------------
-	// Entry points
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Convenience overload – no texture images (geometry + MTL colours only).
-	 */
 	ObjData load(File file, int scale) throws IOException
 	{
 		return load(file, scale, Collections.emptyMap());
 	}
 
 	/**
-	 * Loads the OBJ with proper UV-mapped textures via TextureProvider slots.
-	 * Computes phantom UV-basis vertices for the OSRS software renderer.
+	 * Loads the OBJ with UV-mapped textures via TextureProvider slots, computing
+	 * phantom UV-basis vertices for the OSRS software renderer.
 	 */
 	ObjData loadWithTextures(File file, int scale, Map<String, Short> texSlots,
 		Map<String, BufferedImage> texImages) throws IOException
@@ -143,7 +136,7 @@ class ObjImporter
 					parseFaceWithSlots(line, rawVerts.size(), rawUVs.size(),
 						rawFaces, faceMaterialColors, currentColor,
 						rawFaceUvs, faceMaterialTexSlots, currentTexSlot);
-					// Add image for each triangle produced by fan-triangulation
+					// one image per triangle emitted by fan-triangulation
 					int tokens = line.substring(2).trim().split("\\s+").length;
 					for (int t = 0; t < Math.max(1, tokens - 2); t++)
 					{
@@ -244,14 +237,8 @@ class ObjImporter
 			return new ObjData(vx, vy, vz, fi1, fi2, fi3, faceColors);
 		}
 
-		// ---------------------------------------------------------------
-		// UV allocation with solid-colour optimisation
-		// ---------------------------------------------------------------
-		// Faces whose UV region is a single solid colour don't need a UV
-		// slot — they can use faceColors instead.  This frees UV slots for
-		// faces that actually need per-pixel texture detail.
-		// ---------------------------------------------------------------
-
+		// Faces whose UV region is a single solid colour can use faceColors
+		// instead of a UV slot, freeing slots for faces needing real texture detail.
 		short[] faceTextures = new short[fCount];
 		Arrays.fill(faceTextures, (short) -1);
 		byte[] textureCoords = new byte[fCount];
@@ -275,7 +262,7 @@ class ObjImporter
 			int[] uvIdxs = rawFaceUvs.get(i);
 			if (uvIdxs == null || uvIdxs[0] < 0 || uvIdxs[1] < 0 || uvIdxs[2] < 0)
 			{
-				// No UV data — colour-bake if image available, otherwise texture
+				// no UV data: colour-bake from image if present, else texture
 				if (img != null)
 				{
 					faceColors[i] = JagexColor.rgbToHSL(sampleTexture(img, 0.5f, 0.5f), 1.0);
@@ -293,13 +280,11 @@ class ObjImporter
 			float u1 = rawUVs.get(uvIdxs[1])[0], v1 = rawUVs.get(uvIdxs[1])[1];
 			float u2 = rawUVs.get(uvIdxs[2])[0], v2 = rawUVs.get(uvIdxs[2])[1];
 
-			// Check if this face's UV region is a solid colour — if so, bake the
-			// colour into faceColors and skip the UV slot entirely.
+			// solid-colour UV region: bake the colour and skip the UV slot
 			if (img != null && isSolidColourRegion(img, u0, v0, u1, v1, u2, v2))
 			{
 				float cu = (u0 + u1 + u2) / 3f, cv = (v0 + v1 + v2) / 3f;
 				faceColors[i] = JagexColor.rgbToHSL(sampleTexture(img, cu, cv), 1.0);
-				// leave faceTextures[i] = -1 (no texture, use face colour)
 				solidCount++;
 				continue;
 			}
@@ -307,7 +292,7 @@ class ObjImporter
 			float det = u0 * (v1 - v2) + v0 * (u2 - u1) + (u1 * v2 - u2 * v1);
 			if (Math.abs(det) < 1e-6f)
 			{
-				// Degenerate UV triangle — colour-bake from centroid
+				// degenerate UV triangle: colour-bake from centroid
 				if (img != null)
 				{
 					float cu = (u0 + u1 + u2) / 3f, cv = (v0 + v1 + v2) / 3f;
@@ -406,33 +391,27 @@ class ObjImporter
 	/**
 	 * Loads and parses the given .obj file.
 	 *
-	 * <p>When {@code texImages} is non-empty, each face whose material maps to
-	 * an image has its colour <em>sampled</em> from the PNG at the UV centroid,
-	 * giving a flat-shaded approximation of the full texture.  This avoids
-	 * injecting into the game's texture system entirely.
+	 * <p>When {@code texImages} is non-empty, each face whose material maps to an
+	 * image has its colour sampled from the PNG at the UV centroid, giving a
+	 * flat-shaded approximation without injecting into the game's texture system.
 	 *
 	 * @param file      path to the .obj file
-	 * @param scale     scale factor – final OSRS unit = {@code objUnit * scale / 128f}
-	 * @param texImages map from material name to loaded texture image; may be empty
-	 * @return parsed geometry ready for {@link ModelDataFactory}
+	 * @param scale     final OSRS unit = {@code objUnit * scale / 128f}
+	 * @param texImages material name to loaded texture image; may be empty
 	 * @throws IOException if the file cannot be read or contains no geometry
 	 */
 	ObjData load(File file, int scale, Map<String, BufferedImage> texImages) throws IOException
 	{
-		// Parse MTL for both colours and texture-file mappings
 		Map<String, Short> materialColors = new HashMap<>();
 		Map<String, String> materialTexFiles = new HashMap<>();
 		loadMtl(file, materialColors, materialTexFiles);
 
-		// Raw, pre-merge geometry
 		List<float[]> rawVerts = new ArrayList<>();
 		List<Integer> rawVertRgb = new ArrayList<>();
 		boolean hasVertexColors = false;
 
-		// UV coordinates (v flipped for OSRS convention)
 		List<float[]> rawUVs = new ArrayList<>();
 
-		// Per-triangle data (after fan-triangulation)
 		List<int[]> rawFaces = new ArrayList<>();
 		List<int[]> rawFaceUvs = new ArrayList<>();
 		List<Short> faceMaterialColors = new ArrayList<>();
@@ -489,12 +468,11 @@ class ObjImporter
 			throw new IOException("OBJ file contains no faces: " + file);
 		}
 
-		// Subdivide textured faces for higher colour resolution.
-		// Each level splits every face into 4 sub-faces (midpoint subdivision),
-		// giving 4^levels times the colour samples from the texture.
+		// Subdivide textured faces for higher colour resolution: each level splits
+		// every face into 4 (midpoint), giving 4^levels texture samples per face.
 		if (!texImages.isEmpty())
 		{
-			int levels = 2; // 4^2 = 16 sub-faces per original face
+			int levels = 2; // 16 sub-faces per original face
 			for (int level = 0; level < levels; level++)
 			{
 				subdivide(rawVerts, rawVertRgb, rawFaces, rawUVs,
@@ -508,10 +486,9 @@ class ObjImporter
 			faceMaterialColors, hasVertexColors,
 			faceMaterialImages, rawUVs, rawFaceUvs);
 
-		// When using texture-sampled colours: do NOT merge coincident vertices.
-		// Unique vertices per face prevent light() from averaging normals across
-		// face boundaries (Gouraud smoothing), giving clean flat-shaded faces
-		// instead of the blurry "playdoh" look.
+		// With texture-sampled colours, keep coincident vertices distinct so
+		// light() cannot average normals across faces (Gouraud smoothing); this
+		// yields clean flat-shaded faces rather than a blurred look.
 		int[] remap;
 		if (!texImages.isEmpty())
 		{
@@ -529,13 +506,9 @@ class ObjImporter
 		return assembleFinal(rawVerts, remap, rawFaces, faceColors, scale);
 	}
 
-	// -------------------------------------------------------------------------
-	// Face subdivision (midpoint)
-	// -------------------------------------------------------------------------
-
 	/**
-	 * One level of midpoint subdivision: each triangle becomes 4 sub-triangles.
-	 * Operates in-place on all the raw data lists.
+	 * One level of midpoint subdivision (each triangle becomes 4), operating
+	 * in-place on the raw data lists.
 	 */
 	private static void subdivide(
 		List<float[]> verts, List<Integer> vertRgb,
@@ -609,7 +582,7 @@ class ObjImporter
 		verts.add(new float[]{
 			(pa[0] + pb[0]) / 2f, (pa[1] + pb[1]) / 2f, (pa[2] + pb[2]) / 2f
 		});
-		vertRgb.add(-1); // midpoint vertex has no inherent colour
+		vertRgb.add(-1); // midpoint has no inherent colour
 		cache.put(key, idx);
 		return idx;
 	}
@@ -635,11 +608,8 @@ class ObjImporter
 	}
 
 	/**
-	 * Scans the OBJ (and any referenced MTL) to extract the mapping
-	 * from material name to texture image filename (from {@code map_Kd}).
-	 *
-	 * @return map of material name → texture file (relative to {@code objFile}'s parent),
-	 *         empty if no textures are referenced
+	 * Maps material name to texture file (from {@code map_Kd}), resolved relative
+	 * to {@code objFile}'s parent. Empty if no textures are referenced.
 	 */
 	Map<String, File> scanTextureFiles(File objFile) throws IOException
 	{
@@ -652,10 +622,6 @@ class ObjImporter
 		}
 		return result;
 	}
-
-	// -------------------------------------------------------------------------
-	// Vertex parsing
-	// -------------------------------------------------------------------------
 
 	private int parseVertex(String line, List<float[]> out)
 	{
@@ -690,14 +656,7 @@ class ObjImporter
 		return -1;
 	}
 
-	// -------------------------------------------------------------------------
-	// UV parsing
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Parses a {@code vt u v} line and appends the UV (with V flipped for OSRS
-	 * convention) to {@code out}.
-	 */
+	/** Parses a {@code vt u v} line, appending the UV with V flipped for OSRS. */
 	private void parseUV(String line, List<float[]> out)
 	{
 		String[] p = line.substring(3).trim().split("\\s+");
@@ -709,7 +668,7 @@ class ObjImporter
 		{
 			float u = Float.parseFloat(p[0]);
 			float v = Float.parseFloat(p[1]);
-			// OBJ V=0 is bottom; OSRS pixels are stored top-to-bottom → flip V
+			// OBJ has V=0 at bottom; OSRS stores pixels top-to-bottom, so flip V
 			out.add(new float[]{u, 1.0f - v});
 		}
 		catch (NumberFormatException e)
@@ -717,10 +676,6 @@ class ObjImporter
 			log.warn("ObjImporter: skipping malformed vt line: {}", line);
 		}
 	}
-
-	// -------------------------------------------------------------------------
-	// Face parsing
-	// -------------------------------------------------------------------------
 
 	private void parseFace(String line, int vertCount, int uvCount,
 		List<int[]> faces, List<Short> colors, short color,
@@ -751,7 +706,6 @@ class ObjImporter
 				{
 					int uvIdx = Integer.parseInt(parts[1]);
 					uvIndices[i] = uvIdx > 0 ? uvIdx - 1 : uvCount + uvIdx;
-					// Bounds check
 					if (uvIndices[i] < 0 || uvIndices[i] >= uvCount)
 					{
 						uvIndices[i] = -1;
@@ -774,10 +728,6 @@ class ObjImporter
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// Per-face colour computation
-	// -------------------------------------------------------------------------
-
 	private short[] computeFaceColors(List<int[]> faces, List<Integer> vertRgb,
 		List<Short> materialColors, boolean hasVertexColors,
 		List<BufferedImage> faceImages, List<float[]> rawUVs, List<int[]> rawFaceUvs)
@@ -786,7 +736,7 @@ class ObjImporter
 		int texSampled = 0;
 		for (int i = 0; i < faces.size(); i++)
 		{
-			// Priority 1: sample texture image at UV centroid
+			// priority 1: texture sampled at UV centroid
 			BufferedImage img = faceImages.get(i);
 			int[] uvIdxs = rawFaceUvs.get(i);
 			if (img != null && uvIdxs != null
@@ -803,7 +753,7 @@ class ObjImporter
 				continue;
 			}
 
-			// Priority 2: vertex colours
+			// priority 2: vertex colours
 			if (hasVertexColors)
 			{
 				int[] f = faces.get(i);
@@ -820,7 +770,7 @@ class ObjImporter
 				}
 			}
 
-			// Priority 3: MTL diffuse colour
+			// priority 3: MTL diffuse colour
 			out[i] = materialColors.get(i);
 		}
 		if (texSampled > 0)
@@ -840,14 +790,13 @@ class ObjImporter
 	}
 
 	/**
-	 * Returns {@code true} if the texture region covered by the given UV
-	 * triangle is approximately a single solid colour (all sample points
-	 * within a small tolerance).
+	 * Returns true if the UV triangle's texture region is approximately a single
+	 * solid colour (all samples within tolerance).
 	 */
 	private static boolean isSolidColourRegion(BufferedImage img,
 		float u0, float v0, float u1, float v1, float u2, float v2)
 	{
-		// Sample at the 3 corners, centroid, and 3 edge midpoints (7 samples)
+		// 7 samples: 3 corners, centroid, 3 edge midpoints
 		int c0 = sampleTexture(img, u0, v0);
 		int c1 = sampleTexture(img, u1, v1);
 		int c2 = sampleTexture(img, u2, v2);
@@ -873,10 +822,7 @@ class ObjImporter
 		return dr <= threshold && dg <= threshold && db <= threshold;
 	}
 
-	// -------------------------------------------------------------------------
-	// Vertex merging (for Gouraud shading)
-	// -------------------------------------------------------------------------
-
+	/** Deduplicates coincident vertex positions so light() can average normals (Gouraud). */
 	private int[] buildVertexRemap(List<float[]> verts)
 	{
 		Map<String, Integer> posMap = new HashMap<>(verts.size() * 2);
@@ -901,14 +847,9 @@ class ObjImporter
 		return remap;
 	}
 
-	// -------------------------------------------------------------------------
-	// Final array assembly (geometry + UV basis triangles)
-	// -------------------------------------------------------------------------
-
 	private ObjData assembleFinal(List<float[]> rawVerts, int[] remap,
 		List<int[]> rawFaces, short[] faceColors, int scale)
 	{
-		// Count merged (deduplicated) geometry vertices
 		int mergedCount = 0;
 		for (int r : remap)
 		{
@@ -932,8 +873,6 @@ class ObjImporter
 			vz[ri] = -v[2] * scaleFactor;
 		}
 
-		// Shift model so its lowest point sits at Y=0 (ground level).
-		// In OSRS, positive Y = down, so max(vy) = lowest point.
 		groundModel(vy, mergedCount);
 
 		int fCount = rawFaces.size();
@@ -952,7 +891,10 @@ class ObjImporter
 		return new ObjData(vx, vy, vz, fi1, fi2, fi3, faceColors);
 	}
 
-	/** Shifts all Y values so the maximum (lowest point in OSRS) sits at 0. */
+	/**
+	 * Shifts all Y so the model sits at ground level. OSRS uses positive Y = down,
+	 * so the maximum Y is the lowest point and is moved to 0.
+	 */
 	private static void groundModel(float[] vy, int count)
 	{
 		float maxY = Float.NEGATIVE_INFINITY;
@@ -969,12 +911,8 @@ class ObjImporter
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// MTL loading
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Parses the MTL file referenced by {@code objFile} (if any), populating
+	 * Parses the MTL referenced by {@code objFile} (if any), populating
 	 * {@code colorsOut} with per-material Jagex HSL colours and {@code texOut}
 	 * with per-material texture filenames (from {@code map_Kd}).
 	 */
@@ -1057,28 +995,22 @@ class ObjImporter
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// Helpers
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Resolves a texture filename relative to the OBJ file's parent directory,
-	 * also checking a {@code textures/} sub-folder.
+	 * Resolves a texture filename relative to the OBJ's parent directory, also
+	 * checking a {@code textures/} sub-folder.
 	 */
 	private static File resolveTexFile(File objFile, String filename)
 	{
-		// Absolute or relative path with separator
+		// absolute or relative path with a separator: use as-is
 		if (filename.contains("/") || filename.contains(File.separator))
 		{
 			return new File(filename);
 		}
-		// Same folder as the OBJ
 		File candidate = new File(objFile.getParent(), filename);
 		if (candidate.exists())
 		{
 			return candidate;
 		}
-		// textures/ sub-folder
 		return new File(new File(objFile.getParent(), "textures"), filename);
 	}
 

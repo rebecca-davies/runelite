@@ -58,11 +58,7 @@ import lombok.Getter;
 @Getter
 class ObjData
 {
-	// -------------------------------------------------------------------------
-	// Geometry (OSRS-space, merged vertices + phantom UV vertices at end)
-	// -------------------------------------------------------------------------
-
-	/** OSRS X coordinates for each vertex (geometry + phantom UV vertices). */
+	/** OSRS X coordinates for each vertex (geometry vertices, then phantom UV vertices). */
 	private final float[] verticesX;
 	/** OSRS Y coordinates (down-positive) for each vertex. */
 	private final float[] verticesY;
@@ -71,21 +67,15 @@ class ObjData
 
 	/** First vertex index per triangle face (0-based, geometry vertices only). */
 	private final int[] faceIndices1;
-	/** Second vertex index per triangle face. */
 	private final int[] faceIndices2;
-	/** Third vertex index per triangle face. */
 	private final int[] faceIndices3;
 
 	/** Per-face color in Jagex HSL format. */
 	private final short[] faceColors;
 
-	// -------------------------------------------------------------------------
-	// Texture data (null when no textures are referenced)
-	// -------------------------------------------------------------------------
-
 	/**
 	 * Per-face texture-provider slot ID, or {@code -1} if the face is untextured.
-	 * Length = {@code faceIndices1.length}.
+	 * Length matches {@link #faceIndices1}. Null when no textures are referenced.
 	 */
 	@Nullable
 	private final short[] faceTextures;
@@ -109,19 +99,14 @@ class ObjData
 	 * Per-face index (0-based) into the {@code texIndices} arrays, selecting the
 	 * UV-basis triangle for this face.  A value of {@code -1} (byte 0xFF) means
 	 * "use the face's own vertices as the UV basis".
-	 * Length = {@code faceIndices1.length}.
+	 * Length matches {@link #faceIndices1}.
 	 */
 	@Nullable
 	private final byte[] textureCoords;
 
-	/** Extended UV for >255 UV tris (GPU reads via ExtendedUV). */
+	/** Extended UV data for models with more than 255 UV triangles; read by the GPU via ExtendedUV. */
 	int[] extTexCoords, extTexIdx1, extTexIdx2, extTexIdx3;
 
-	// -------------------------------------------------------------------------
-	// Constructors
-	// -------------------------------------------------------------------------
-
-	/** Geometry-only constructor (no texture data). */
 	ObjData(float[] verticesX, float[] verticesY, float[] verticesZ,
 		int[] faceIndices1, int[] faceIndices2, int[] faceIndices3,
 		short[] faceColors)
@@ -131,7 +116,6 @@ class ObjData
 			null, null, null, null, null);
 	}
 
-	/** Full constructor including UV-basis triangle data. */
 	ObjData(float[] verticesX, float[] verticesY, float[] verticesZ,
 		int[] faceIndices1, int[] faceIndices2, int[] faceIndices3,
 		short[] faceColors,
@@ -155,11 +139,6 @@ class ObjData
 		this.textureCoords = textureCoords;
 	}
 
-	// -------------------------------------------------------------------------
-	// Helpers
-	// -------------------------------------------------------------------------
-
-	/** Returns {@code true} if this data includes texture UV information. */
 	boolean hasTextures()
 	{
 		return faceTextures != null;

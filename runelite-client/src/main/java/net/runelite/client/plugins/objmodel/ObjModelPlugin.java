@@ -103,12 +103,11 @@ public class ObjModelPlugin extends Plugin
 
 	private final Hooks.RenderableDrawListener drawListener = this::shouldDraw;
 
-	/** Parsed config entry */
 	private static class NpcEntry
 	{
 		final String modelFile;
 		final int scale;
-		/** Rotation offset in 90° increments added to NPC facing. 0=no change, 1=+90°, 2=+180°, 3=+270° */
+		/** Rotation offset in 90° increments added to NPC facing (0-3). */
 		final int rotationOffset;
 
 		NpcEntry(String modelFile, int scale, int rotationOffset)
@@ -119,7 +118,6 @@ public class ObjModelPlugin extends Plugin
 		}
 	}
 
-	/** Parsed config entry for object replacements */
 	private static class ObjEntry
 	{
 		final String modelFile;
@@ -134,26 +132,17 @@ public class ObjModelPlugin extends Plugin
 		}
 	}
 
-	/** Parsed config: lower-case NPC name → entry */
+	/** Lower-case NPC name to entry. */
 	private Map<String, NpcEntry> npcEntries = new HashMap<>();
-	/** Parsed config: object ID → entry */
+	/** Object ID to entry. */
 	private Map<Integer, ObjEntry> objectEntries = new HashMap<>();
-	/** Cached compiled models: "modelFile@scale" → Model */
+	/** Cache key "modelFile@scale" to compiled model. */
 	private final Map<String, Model> modelCache = new HashMap<>();
-	/** Texture injectors per model file (for cleanup + per-frame reinject) */
 	private final Map<String, TextureInjector> modelTexInjectors = new HashMap<>();
-	/** Active NPC overlays: NPC → RuneLiteObject */
 	private final Map<NPC, RuneLiteObject> npcOverlays = new HashMap<>();
-	/** Tracks which entry each NPC uses (for direction lookups) */
 	private final Map<NPC, NpcEntry> npcEntryMap = new HashMap<>();
-	/** Active object overlays: key → RuneLiteObject */
 	private final Map<Long, RuneLiteObject> objectOverlays = new HashMap<>();
-	/** Replaced game objects: key → GameObject (for cleanup) */
 	private final Map<Long, GameObject> replacedObjects = new HashMap<>();
-
-	// -------------------------------------------------------------------------
-	// Plugin lifecycle
-	// -------------------------------------------------------------------------
 
 	@Override
 	protected void startUp()
@@ -180,12 +169,7 @@ public class ObjModelPlugin extends Plugin
 		clientThread.invoke(() -> { despawnAll(); return true; });
 	}
 
-	/**
-	 * Marks replaced NPC models as hidden. The GPU plugin's SceneUploader
-	 * and FacePrioritySorter check ExtendedUV.hiddenModels and force
-	 * full transparency (invisible but still clickable).
-	 */
-
+	/** Flags replaced NPCs in {@link ExtendedUV#hiddenNpcs} so the GPU plugin renders them fully transparent but still clickable. */
 	private boolean shouldDraw(Renderable renderable, boolean drawingUI)
 	{
 		if (!drawingUI && renderable instanceof NPC && npcOverlays.containsKey(renderable))
@@ -194,10 +178,6 @@ public class ObjModelPlugin extends Plugin
 		}
 		return true;
 	}
-
-	// -------------------------------------------------------------------------
-	// Events
-	// -------------------------------------------------------------------------
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
@@ -260,13 +240,12 @@ public class ObjModelPlugin extends Plugin
 			return;
 		}
 
-		// CPU: re-set pixel fields on all injectors
 		for (TextureInjector ti : modelTexInjectors.values())
 		{
 			ti.reinjectPixels(p);
 		}
 
-		// GPU: force re-init once (so GPU allocates 256 layers), then upload every frame.
+		// Force one GPU re-init so it allocates all 256 layers, then upload every frame.
 		if (client.isGpu())
 		{
 			int texArrayId = TextureInjector.findGpuTextureArrayId(pluginManager);
@@ -302,7 +281,6 @@ public class ObjModelPlugin extends Plugin
 		}
 		updateNpcOverlays();
 
-		// Continuously scan for NPCs that need replacement
 		if (!npcEntries.isEmpty())
 		{
 			for (NPC npc : client.getNpcs())
@@ -353,10 +331,6 @@ public class ObjModelPlugin extends Plugin
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// NPC config parsing
-	// -------------------------------------------------------------------------
-
 	/**
 	 * Parses config lines: {@code npcName:model.obj:scale:direction}
 	 * <br>Scale and direction are optional. Direction: 0=follow NPC, 1=N, 2=E, 3=S, 4=W.
@@ -406,10 +380,6 @@ public class ObjModelPlugin extends Plugin
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// NPC replacement logic
-	// -------------------------------------------------------------------------
-
 	private boolean spawnNpcReplacements()
 	{
 		if (npcEntries.isEmpty() || client.getGameState() != GameState.LOGGED_IN)
@@ -449,7 +419,7 @@ public class ObjModelPlugin extends Plugin
 
 		RuneLiteObject obj = client.createRuneLiteObject();
 		obj.setModel(model);
-		// Expand radius for multi-tile NPCs so model covers all tiles
+		// Expand radius so the model covers all tiles of a multi-tile NPC.
 		NPCComposition comp = npc.getTransformedComposition();
 		if (comp != null && comp.getSize() > 1)
 		{
@@ -491,18 +461,12 @@ public class ObjModelPlugin extends Plugin
 		int plane = client.getTopLevelWorldView().getPlane();
 		obj.setLocation(lp, plane);
 
-		// NPC orientation + 1024 (OBJ model facing correction) + rotation offset
 		NpcEntry entry = npcEntryMap.get(npc);
 		int rotOffset = (entry != null) ? entry.rotationOffset : 0;
-		// Each rotation unit = 512 OSRS orientation units (90°)
+		// +1024 corrects OBJ facing; each rotationOffset unit is 512 (90°).
 		int orientation = (npc.getCurrentOrientation() + 1024 + rotOffset * 512) % 2048;
 		obj.setOrientation(orientation);
 	}
-
-
-	// -------------------------------------------------------------------------
-	// Object config parsing + replacement
-	// -------------------------------------------------------------------------
 
 	private void parseObjectConfig()
 	{
@@ -531,7 +495,6 @@ public class ObjModelPlugin extends Plugin
 			}
 			catch (NumberFormatException e)
 			{
-				// Also support object name matching
 				continue;
 			}
 			String modelFile = parts[1].trim();
@@ -632,10 +595,8 @@ public class ObjModelPlugin extends Plugin
 			return;
 		}
 
-		// Tell GPU to skip this object in both zone upload and drawTemp
 		ExtendedUV.replacedObjectIds.add(go.getId());
 
-		// Invalidate the zone so it re-uploads without this object
 		var dc = client.getDrawCallbacks();
 		if (dc != null)
 		{
@@ -650,12 +611,12 @@ public class ObjModelPlugin extends Plugin
 			}
 		}
 
-		// Overlay custom model via RuneLiteObject
 		RuneLiteObject obj = client.createRuneLiteObject();
 		obj.setModel(model);
 
 		int plane = client.getTopLevelWorldView().getPlane();
 		obj.setLocation(lp, plane);
+		// +1024 corrects OBJ facing; each rotationOffset unit is 512 (90°).
 		int orientation = (1024 + entry.rotationOffset * 512) % 2048;
 		obj.setOrientation(orientation);
 		obj.setActive(true);
@@ -670,10 +631,6 @@ public class ObjModelPlugin extends Plugin
 		WorldPoint wp = go.getWorldLocation();
 		return ((long) go.getId() << 36) | ((long) wp.getX() << 20) | ((long) wp.getY() << 4) | wp.getPlane();
 	}
-
-	// -------------------------------------------------------------------------
-	// Model loading + caching
-	// -------------------------------------------------------------------------
 
 	private Model getOrLoadModel(String modelFile, int scale, String cacheKey)
 	{
@@ -695,7 +652,6 @@ public class ObjModelPlugin extends Plugin
 			return null;
 		}
 
-		// Texture injection
 		Map<String, Short> texSlots = Collections.emptyMap();
 		TextureProvider provider = client.getTextureProvider();
 		if (provider != null)
@@ -715,7 +671,6 @@ public class ObjModelPlugin extends Plugin
 			}
 		}
 
-		// Load and build
 		Map<String, BufferedImage> texImages = loadTextureImages(file);
 		ObjData data;
 		try
@@ -763,10 +718,6 @@ public class ObjModelPlugin extends Plugin
 		return model;
 	}
 
-	// -------------------------------------------------------------------------
-	// Cleanup
-	// -------------------------------------------------------------------------
-
 	private void despawnAll()
 	{
 		for (RuneLiteObject obj : npcOverlays.values())
@@ -791,10 +742,6 @@ public class ObjModelPlugin extends Plugin
 		}
 		modelTexInjectors.clear();
 	}
-
-	// -------------------------------------------------------------------------
-	// Texture helpers
-	// -------------------------------------------------------------------------
 
 	private Map<String, Short> injectTextures(File objFile, TextureProvider provider,
 		TextureInjector injector)

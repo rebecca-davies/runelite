@@ -91,7 +91,7 @@ void main() {
   c.rgb = colorblind(c.rgb);
 #endif
 
-  // Discard fully transparent fragments (used by OBJ model plugin to hide NPCs)
+  // OBJ model plugin: discard fully-transparent fragments to hide replaced NPCs
   if (c.a < 0.01)
     discard;
 

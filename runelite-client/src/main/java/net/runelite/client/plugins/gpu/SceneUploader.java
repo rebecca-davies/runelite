@@ -361,7 +361,7 @@ class SceneUploader
 				continue;
 			}
 
-			// Skip zone upload for replaced game objects (custom model shown via RuneLiteObject)
+			// OBJ model plugin: replaced objects are drawn as RuneLiteObjects, so skip the zone upload
 			if (net.runelite.client.plugins.objmodel.ExtendedUV.replacedObjectIds.contains(gameObject.getId()))
 			{
 				continue;
@@ -910,7 +910,7 @@ class SceneUploader
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
-		// Check for extended UV data (>255 UV triangles) from OBJ model plugin
+		// OBJ model plugin: extended UV data for models exceeding the 255 UV-triangle byte limit
 		int[] extCoords = net.runelite.client.plugins.objmodel.ExtendedUV.texCoords.get(model);
 		final byte[] textureFaces;
 		final int[] texIndices1, texIndices2, texIndices3;

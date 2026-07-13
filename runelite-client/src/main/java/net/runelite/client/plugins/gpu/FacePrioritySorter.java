@@ -106,7 +106,7 @@ class FacePrioritySorter
 		final short[] faceTextures = model.getFaceTextures();
 
 		byte[] transparencies = model.getFaceTransparencies();
-		// Force full transparency for hidden NPC models (OBJ plugin)
+		// OBJ model plugin: force replaced NPC models fully transparent
 		if (net.runelite.client.plugins.objmodel.ExtendedUV.currentModelHidden)
 		{
 			transparencies = new byte[faceCount];

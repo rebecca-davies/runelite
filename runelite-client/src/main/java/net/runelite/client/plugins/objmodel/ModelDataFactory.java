@@ -36,32 +36,21 @@ import net.runelite.api.ModelData;
 import sun.misc.Unsafe; //NOPMD
 
 /**
- * Creates {@link ModelData} instances from raw geometry arrays using reflection.
+ * Constructs {@link ModelData} instances from raw geometry arrays via reflection.
  *
- * <p>The RuneLite public API provides no way to construct a {@code ModelData} from
- * scratch — models can only be loaded from the game cache.  This class works around
- * that limitation by:
- * <ol>
- *   <li>Loading any small model from the cache to obtain a reference to the
- *       obfuscated {@code RSModelDefinition} implementation class.</li>
- *   <li>Walking the class's declared fields and matching them to the known
- *       {@link ModelData} interface methods via reference identity (for arrays)
- *       and value comparison (for integer counts).</li>
- *   <li>Using {@link sun.misc.Unsafe#allocateInstance} to create a blank instance
- *       — bypassing any constructor — then writing the geometry arrays directly
- *       into the identified fields.</li>
- * </ol>
+ * <p>The public API cannot build a {@code ModelData} from scratch; models can only
+ * be loaded from the cache. This class works around that by loading a model to obtain
+ * the obfuscated implementation class, matching its declared fields to the known
+ * {@link ModelData} accessors (reference identity for arrays, value comparison for
+ * counts), then using {@link sun.misc.Unsafe#allocateInstance} to create a blank
+ * instance and writing the arrays directly into the identified fields.
  *
- * <h3>Texture UV</h3>
- * <p>After finding a textured model in the cache, the factory locates the
- * {@code faceTextures}, {@code texIndices1/2/3}, and {@code textureCoords} fields
- * on the ModelData class by reference-identity matching.  These are set in
- * {@link #create} so that {@link ModelData#light()} picks them up and the
- * OSRS software renderer derives correct UV coordinates from the phantom
- * UV-basis triangles computed by {@link ObjImporter}.
+ * <p>Texture UV fields ({@code faceTextures}, {@code texIndices1/2/3},
+ * {@code textureCoords}) are discovered from a textured cache model and set in
+ * {@link #create} so {@link ModelData#light()} picks them up and the renderer derives
+ * UVs from the phantom UV-basis triangles produced by {@link ObjImporter}.
  *
- * <p>All work happens on the client thread.  Field discovery is performed once and
- * cached; subsequent {@link #create} calls are cheap.
+ * <p>All work runs on the client thread. Field discovery happens once and is cached.
  */
 @Slf4j
 class ModelDataFactory
@@ -71,7 +60,6 @@ class ModelDataFactory
 	private static Class<?> modelDataClass;
 	private static Unsafe unsafe;
 
-	// Basic geometry fields
 	private static Field fVertexCount;
 	private static Field fVerticesX;
 	private static Field fVerticesY;
@@ -82,23 +70,19 @@ class ModelDataFactory
 	private static Field fFaceIndices3;
 	private static Field fFaceColors;
 
-	// Texture fields on ModelData (optional; null if discovery failed)
-	private static Field fFaceTextures;      // short[]  – per-face texture-provider slot ID
-	private static Field fTexIndices1;       // short[]  – UV-basis triangle vertex 0 indices
-	private static Field fTexIndices2;       // short[]  – UV-basis triangle vertex 1 indices
-	private static Field fTexIndices3;       // short[]  – UV-basis triangle vertex 2 indices
-	private static Field fTextureCoords;     // byte[]   – per-face UV-triangle selector
-	private static Field fNumTextureFaces;   // int      – number of UV-basis triangles
-	private static Field fTexRenderTypes;    // byte[]   – UV mapping type per UV triangle (0=planar)
-
-	// -------------------------------------------------------------------------
-	// Initialisation (client thread only)
-	// -------------------------------------------------------------------------
+	// Texture fields on ModelData; null if discovery failed
+	private static Field fFaceTextures;      // short[] per-face texture-provider slot ID
+	private static Field fTexIndices1;       // short[] UV-basis triangle vertex 0 indices
+	private static Field fTexIndices2;       // short[] UV-basis triangle vertex 1 indices
+	private static Field fTexIndices3;       // short[] UV-basis triangle vertex 2 indices
+	private static Field fTextureCoords;     // byte[] per-face UV-triangle selector
+	private static Field fNumTextureFaces;   // int number of UV-basis triangles
+	private static Field fTexRenderTypes;    // byte[] UV mapping type per UV triangle (0 = planar)
 
 	/**
-	 * Performs one-time reflection setup.  Must be called on the client thread.
+	 * One-time reflection setup. Must run on the client thread.
 	 *
-	 * @return {@code true} if all required (geometry) fields were identified
+	 * @return {@code true} if all required geometry fields were identified
 	 */
 	static boolean init(Client client)
 	{
@@ -131,7 +115,6 @@ class ModelDataFactory
 		modelDataClass = dummy.getClass();
 		discoverFields(dummy);
 
-		// Try to discover texture UV fields using a textured model
 		ModelData texturedDummy = loadTexturedDummy(client);
 		if (texturedDummy != null)
 		{
@@ -162,10 +145,6 @@ class ModelDataFactory
 		return true;
 	}
 
-	// -------------------------------------------------------------------------
-	// Dummy model loading
-	// -------------------------------------------------------------------------
-
 	private static ModelData loadDummy(Client client)
 	{
 		for (int id : new int[]{5809, 43330, 1, 100, 500, 1000})
@@ -180,9 +159,8 @@ class ModelDataFactory
 	}
 
 	/**
-	 * Tries a broad range of model IDs to find one that has texture data
-	 * ({@code getFaceTextures() != null} and a non-empty lit-model
-	 * {@code getTexIndices1()}).
+	 * Scans a range of model IDs for one with texture data (non-null
+	 * {@code getFaceTextures()} and a non-empty lit-model {@code getTexIndices1()}).
 	 */
 	private static ModelData loadTexturedDummy(Client client)
 	{
@@ -215,10 +193,6 @@ class ModelDataFactory
 		}
 		return null;
 	}
-
-	// -------------------------------------------------------------------------
-	// Geometry field discovery
-	// -------------------------------------------------------------------------
 
 	private static void discoverFields(ModelData dummy)
 	{
@@ -313,24 +287,15 @@ class ModelDataFactory
 		fFaceCount = pickNearest(fcCandidates, fFaceIndices1, all);
 	}
 
-	// -------------------------------------------------------------------------
-	// Texture field discovery
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Discovers the texture-related fields on the {@link ModelData} implementation
-	 * class.
+	 * Discovers the texture-related fields on the {@link ModelData} implementation class.
 	 *
-	 * <p>{@code fFaceTextures} is found by reference identity with
-	 * {@link ModelData#getFaceTextures()}.
-	 *
-	 * <p>The {@code texIndices} fields are {@code short[]} on ModelData but exposed
-	 * only as {@code int[]} on the lit {@link Model}.  We find them by comparing
-	 * element values (short → int widening) between unlit ModelData fields and
-	 * {@code m.getTexIndices1/2/3()}.
-	 *
-	 * <p>{@code textureCoords} is the {@code byte[]} of length {@code faceCount}
-	 * that is NOT {@code faceTransparencies}.
+	 * <p>{@code faceTextures} is found by reference identity with
+	 * {@link ModelData#getFaceTextures()}. The {@code texIndices} fields are
+	 * {@code short[]} on ModelData but exposed only as {@code int[]} on the lit
+	 * {@link Model}, so they are matched by element value (short-to-int widening).
+	 * {@code textureCoords} is the {@code byte[]} of length {@code faceCount} that is
+	 * not {@code faceTransparencies}.
 	 */
 	private static void discoverTextureFields(ModelData md, Model m)
 	{
@@ -399,7 +364,7 @@ class ModelDataFactory
 					}
 					else if (litTi1 != null && val.length == litTi1.length)
 					{
-						// byte[] with length == numTextureFaces → textureRenderTypes
+						// byte[] of length numTextureFaces is textureRenderTypes
 						fTexRenderTypes = f;
 					}
 				}
@@ -409,9 +374,8 @@ class ModelDataFactory
 			}
 		}
 
-		// Discover numTextureFaces: an int field whose value equals the
-		// texIndices array length.  Skip fields already identified as
-		// vertexCount or faceCount.
+		// numTextureFaces: an int field equal to the texIndices length, excluding
+		// the already-identified vertexCount and faceCount fields.
 		if (litTi1 != null && litTi1.length > 0)
 		{
 			int numTexFaces = litTi1.length;
@@ -445,8 +409,8 @@ class ModelDataFactory
 	}
 
 	/**
-	 * Checks whether a {@code short[]} (ModelData storage) matches an
-	 * {@code int[]} (Model interface return type) element-by-element.
+	 * Whether a {@code short[]} (ModelData storage) matches an {@code int[]} (Model
+	 * accessor return type) element-by-element.
 	 */
 	private static boolean matchesShortToInt(short[] s, int[] ints)
 	{
@@ -464,10 +428,10 @@ class ModelDataFactory
 		return true;
 	}
 
-	// -------------------------------------------------------------------------
-	// Field-ordering helpers
-	// -------------------------------------------------------------------------
-
+	/**
+	 * Picks the candidate field declared nearest to {@code anchor}, disambiguating
+	 * multiple int fields that share the same value.
+	 */
 	@Nullable
 	private static Field pickNearest(List<Field> candidates, @Nullable Field anchor, List<Field> all)
 	{
@@ -507,14 +471,9 @@ class ModelDataFactory
 		return fields;
 	}
 
-	// -------------------------------------------------------------------------
-	// Model creation
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Creates a new {@link ModelData} instance populated with geometry (and
-	 * optional texture/UV data) from {@code data}.  The returned instance is
-	 * ready for {@code light()}.
+	 * Creates a {@link ModelData} populated with geometry and optional texture/UV
+	 * data from {@code data}.
 	 *
 	 * @return a ModelData ready for {@code light()}, or {@code null} if the factory
 	 *         is not ready
@@ -552,7 +511,7 @@ class ModelDataFactory
 				{
 					int numTex = data.getTexIndices1().length;
 					setInt(fNumTextureFaces, md, numTex);
-					// textureRenderTypes: byte[] filled with 0 = planar UV mapping
+					// zero-filled textureRenderTypes selects planar UV mapping
 					if (fTexRenderTypes != null)
 					{
 						setRef(fTexRenderTypes, md, new byte[numTex]);
@@ -581,10 +540,6 @@ class ModelDataFactory
 			&& fFaceIndices1 != null && fFaceIndices2 != null && fFaceIndices3 != null
 			&& fFaceColors != null;
 	}
-
-	// -------------------------------------------------------------------------
-	// Reflection helpers
-	// -------------------------------------------------------------------------
 
 	private static void setInt(Field f, Object obj, int value)
 	{

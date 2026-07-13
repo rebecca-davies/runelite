@@ -48,13 +48,13 @@ import net.runelite.client.callback.RenderCallbackManager;
 @Slf4j
 class SceneUploader
 {
-	private static final float[] modelLocalX;
-	private static final float[] modelLocalY;
-	private static final float[] modelLocalZ;
+	private static float[] modelLocalX;
+	private static float[] modelLocalY;
+	private static float[] modelLocalZ;
 
-	private final int[] modelLocalXI;
-	private final int[] modelLocalYI;
-	private final int[] modelLocalZI;
+	private int[] modelLocalXI;
+	private int[] modelLocalYI;
+	private int[] modelLocalZI;
 
 	static
 	{
@@ -272,6 +272,11 @@ class SceneUploader
 				continue;
 			}
 
+			if (net.runelite.client.plugins.objmodel.ExtendedUV.replacedObjectIds.contains(gameObject.getId()))
+			{
+				continue;
+			}
+
 			Renderable renderable = gameObject.getRenderable();
 			zoneRenderableSize(z, renderable);
 		}
@@ -352,6 +357,12 @@ class SceneUploader
 			}
 
 			if (!renderCallbackManager.drawObject(scene, gameObject))
+			{
+				continue;
+			}
+
+			// Skip zone upload for replaced game objects (custom model shown via RuneLiteObject)
+			if (net.runelite.client.plugins.objmodel.ExtendedUV.replacedObjectIds.contains(gameObject.getId()))
 			{
 				continue;
 			}
@@ -610,6 +621,15 @@ class SceneUploader
 			orientCos = Perspective.COSINE[orient];
 		}
 
+		// Grow instance buffers if model has more vertices than default
+		if (vertexCount > modelLocalXI.length)
+		{
+			int newSize = vertexCount + 1000;
+			modelLocalXI = new int[newSize];
+			modelLocalYI = new int[newSize];
+			modelLocalZI = new int[newSize];
+		}
+
 		for (int v = 0; v < vertexCount; ++v)
 		{
 			int vx = (int) vertexX[v];
@@ -733,6 +753,15 @@ class SceneUploader
 		{
 			orientSine = Perspective.SINE[orientation] / 65536f;
 			orientCosine = Perspective.COSINE[orientation] / 65536f;
+		}
+
+		// Grow static buffers if model has more vertices than the default 6500
+		if (vertexCount > modelLocalX.length)
+		{
+			int newSize = vertexCount + 1000;
+			FacePrioritySorter.modelLocalX = modelLocalX = new float[newSize];
+			FacePrioritySorter.modelLocalY = modelLocalY = new float[newSize];
+			FacePrioritySorter.modelLocalZ = modelLocalZ = new float[newSize];
 		}
 
 		for (int v = 0; v < vertexCount; ++v)
@@ -881,18 +910,35 @@ class SceneUploader
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
-		final byte[] textureFaces = model.getTextureFaces();
-		final int[] texIndices1 = model.getTexIndices1();
-		final int[] texIndices2 = model.getTexIndices2();
-		final int[] texIndices3 = model.getTexIndices3();
+		// Check for extended UV data (>255 UV triangles) from OBJ model plugin
+		int[] extCoords = net.runelite.client.plugins.objmodel.ExtendedUV.texCoords.get(model);
+		final byte[] textureFaces;
+		final int[] texIndices1, texIndices2, texIndices3;
+		int extIdx = -1;
 
-		if (textureFaces != null && textureFaces[face] != -1)
+		if (extCoords != null && face < extCoords.length && extCoords[face] >= 0)
+		{
+			textureFaces = null;
+			texIndices1 = net.runelite.client.plugins.objmodel.ExtendedUV.texIdx1.get(model);
+			texIndices2 = net.runelite.client.plugins.objmodel.ExtendedUV.texIdx2.get(model);
+			texIndices3 = net.runelite.client.plugins.objmodel.ExtendedUV.texIdx3.get(model);
+			extIdx = extCoords[face];
+		}
+		else
+		{
+			textureFaces = model.getTextureFaces();
+			texIndices1 = model.getTexIndices1();
+			texIndices2 = model.getTexIndices2();
+			texIndices3 = model.getTexIndices3();
+		}
+
+		if (extIdx >= 0 || (textureFaces != null && textureFaces[face] != -1))
 		{
 			final int triangleA = indices1[face];
 			final int triangleB = indices2[face];
 			final int triangleC = indices3[face];
 
-			int tfaceIdx = textureFaces[face] & 0xff;
+			int tfaceIdx = extIdx >= 0 ? extIdx : (textureFaces[face] & 0xff);
 			int texA = texIndices1[tfaceIdx];
 			int texB = texIndices2[tfaceIdx];
 			int texC = texIndices3[tfaceIdx];

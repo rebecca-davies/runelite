@@ -91,6 +91,10 @@ void main() {
   c.rgb = colorblind(c.rgb);
 #endif
 
+  // Discard fully transparent fragments (used by OBJ model plugin to hide NPCs)
+  if (c.a < 0.01)
+    discard;
+
   vec3 mixedColor = mix(c.rgb, fogColor.rgb, fFogAmount);
   FragColor = vec4(mixedColor, c.a);
 

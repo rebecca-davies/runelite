@@ -1163,8 +1163,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			return;
 		}
 
+		// Hide dynamic/animated game objects that have been replaced
+		boolean objectReplaced = net.runelite.client.plugins.objmodel.ExtendedUV
+			.replacedObjectIds.contains(tileObject.getId());
+
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
-		if (m.getFaceTransparencies() == null)
+		if (m.getFaceTransparencies() == null && !objectReplaced)
 		{
 			VAO o = vaoO.get(size);
 			clientUploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);
@@ -1172,6 +1176,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 		else
 		{
+			net.runelite.client.plugins.objmodel.ExtendedUV.currentModelHidden = objectReplaced;
+
 			m.calculateBoundsCylinder();
 			VAO o = vaoO.get(size), a = vaoA.get(size);
 			int start = a.vbo.vb.position();
@@ -1217,13 +1223,22 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			return;
 		}
 
+		boolean objectReplaced = net.runelite.client.plugins.objmodel.ExtendedUV
+			.replacedObjectIds.contains(gameObject.getId());
+
 		Renderable renderable = gameObject.getRenderable();
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
 		int renderMode = renderable.getRenderMode();
-		if (renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH || m.getFaceTransparencies() != null || m.getTransparency() != 0)
+		if (renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH || m.getFaceTransparencies() != null || m.getTransparency() != 0
+			|| net.runelite.client.plugins.objmodel.ExtendedUV.isHiddenRenderable(renderable)
+			|| objectReplaced)
 		{
 			VAO o = vaoO.get(size);
 			VAO a = vaoA.get(size);
+
+			net.runelite.client.plugins.objmodel.ExtendedUV.currentModelHidden =
+				net.runelite.client.plugins.objmodel.ExtendedUV.isHiddenRenderable(renderable)
+				|| objectReplaced;
 
 			int start = a.vbo.vb.position();
 			m.calculateBoundsCylinder();

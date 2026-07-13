@@ -32,15 +32,15 @@ import net.runelite.api.Projection;
 
 class FacePrioritySorter
 {
-	static final int[] distances;
+	static int[] distances;
 	static final char[] zsortHead, zsortTail, zsortNext;
 
-	private static final float[] modelProjectedX;
-	private static final float[] modelProjectedY;
+	private static float[] modelProjectedX;
+	private static float[] modelProjectedY;
 
-	static final float[] modelLocalX;
-	static final float[] modelLocalY;
-	static final float[] modelLocalZ;
+	static float[] modelLocalX;
+	static float[] modelLocalY;
+	static float[] modelLocalZ;
 
 	static final int[] numOfPriority;
 	private static final int[] eq10;
@@ -105,7 +105,13 @@ class FacePrioritySorter
 
 		final short[] faceTextures = model.getFaceTextures();
 
-		final byte[] transparencies = model.getFaceTransparencies();
+		byte[] transparencies = model.getFaceTransparencies();
+		// Force full transparency for hidden NPC models (OBJ plugin)
+		if (net.runelite.client.plugins.objmodel.ExtendedUV.currentModelHidden)
+		{
+			transparencies = new byte[faceCount];
+			java.util.Arrays.fill(transparencies, (byte) -1);
+		}
 		final byte modelTransparency = model.getTransparency();
 		final byte[] bias = model.getFaceBias();
 
@@ -115,6 +121,18 @@ class FacePrioritySorter
 		{
 			orientSine = Perspective.SINE[orientation] / 65536f;
 			orientCosine = Perspective.COSINE[orientation] / 65536f;
+		}
+
+		// Grow buffers if model exceeds default size
+		if (vertexCount > modelLocalX.length)
+		{
+			int ns = vertexCount + 1000;
+			distances = new int[ns];
+			modelProjectedX = new float[ns];
+			modelProjectedY = new float[ns];
+			modelLocalX = new float[ns];
+			modelLocalY = new float[ns];
+			modelLocalZ = new float[ns];
 		}
 
 		float[] p = proj.project(x, y, z);

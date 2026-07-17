@@ -110,7 +110,7 @@ class FacePrioritySorter
 		if (net.runelite.client.plugins.objmodel.ExtendedUV.currentModelHidden)
 		{
 			transparencies = new byte[faceCount];
-			java.util.Arrays.fill(transparencies, (byte) -1);
+			Arrays.fill(transparencies, (byte) -1);
 		}
 		final byte modelTransparency = model.getTransparency();
 		final byte[] bias = model.getFaceBias();

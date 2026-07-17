@@ -39,7 +39,6 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
 import net.runelite.api.Texture;
 import net.runelite.api.TextureProvider;
 import net.runelite.client.plugins.Plugin;
@@ -254,20 +253,6 @@ class TextureInjector
 		return slot;
 	}
 
-	/**
-	 * Shallow-copies a Texture. Uses Unsafe.allocateInstance to skip the
-	 * constructor, since the deob Texture class has no accessible one.
-	 */
-	private static Texture cloneTexture(Texture donor) throws Exception
-	{
-		Texture clone = (Texture) unsafe.allocateInstance(donor.getClass());
-		for (Field f : allTexFields)
-		{
-			f.set(clone, f.get(donor));
-		}
-		return clone;
-	}
-
 	/** Re-points the injected slots' pixel fields at their PNG data (CPU side only). */
 	void reinjectPixels(TextureProvider provider)
 	{
@@ -437,8 +422,13 @@ class TextureInjector
 	{
 		for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass())
 		{
-			try { return c.getDeclaredField(name); }
-			catch (NoSuchFieldException ignored) {}
+			try
+			{
+				return c.getDeclaredField(name);
+			}
+			catch (NoSuchFieldException ignored)
+			{
+			}
 		}
 		return null;
 	}

@@ -28,7 +28,6 @@ import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -54,7 +53,6 @@ import net.runelite.api.events.ClientTick;
 import net.runelite.api.events.GameObjectDespawned;
 import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.client.RuneLite;
@@ -133,9 +131,9 @@ public class ObjModelPlugin extends Plugin
 	}
 
 	/** Lower-case NPC name to entry. */
-	private Map<String, NpcEntry> npcEntries = new HashMap<>();
+	private final Map<String, NpcEntry> npcEntries = new HashMap<>();
 	/** Object ID to entry. */
-	private Map<Integer, ObjEntry> objectEntries = new HashMap<>();
+	private final Map<Integer, ObjEntry> objectEntries = new HashMap<>();
 	/** Cache key "modelFile@scale" to compiled model. */
 	private final Map<String, Model> modelCache = new HashMap<>();
 	private final Map<String, TextureInjector> modelTexInjectors = new HashMap<>();
@@ -158,7 +156,12 @@ public class ObjModelPlugin extends Plugin
 			{
 				TextureInjector.init(p);
 			}
-			clientThread.invokeLater(() -> { spawnNpcReplacements(); spawnObjectReplacements(); return true; });
+			clientThread.invokeLater(() ->
+			{
+				spawnNpcReplacements();
+				spawnObjectReplacements();
+				return true;
+			});
 		}
 	}
 
@@ -166,7 +169,11 @@ public class ObjModelPlugin extends Plugin
 	protected void shutDown()
 	{
 		hooks.unregisterRenderableDrawListener(drawListener);
-		clientThread.invoke(() -> { despawnAll(); return true; });
+		clientThread.invoke(() ->
+		{
+			despawnAll();
+			return true;
+		});
 	}
 
 	/** Flags replaced NPCs in {@link ExtendedUV#hiddenNpcs} so the GPU plugin renders them fully transparent but still clickable. */
@@ -191,7 +198,12 @@ public class ObjModelPlugin extends Plugin
 				{
 					TextureInjector.init(p);
 				}
-				clientThread.invokeLater(() -> { spawnNpcReplacements(); spawnObjectReplacements(); return true; });
+				clientThread.invokeLater(() ->
+				{
+					spawnNpcReplacements();
+					spawnObjectReplacements();
+					return true;
+				});
 				break;
 			}
 			case LOADING:
@@ -224,7 +236,13 @@ public class ObjModelPlugin extends Plugin
 		parseObjectConfig();
 		if (client.getGameState() == GameState.LOGGED_IN)
 		{
-			clientThread.invokeLater(() -> { despawnAll(); spawnNpcReplacements(); spawnObjectReplacements(); return true; });
+			clientThread.invokeLater(() ->
+			{
+				despawnAll();
+				spawnNpcReplacements();
+				spawnObjectReplacements();
+				return true;
+			});
 		}
 	}
 
@@ -257,7 +275,11 @@ public class ObjModelPlugin extends Plugin
 				gpuFrameDelay = 3;
 				return;
 			}
-			if (gpuFrameDelay > 0) { gpuFrameDelay--; return; }
+			if (gpuFrameDelay > 0)
+			{
+				gpuFrameDelay--;
+				return;
+			}
 			texArrayId = TextureInjector.findGpuTextureArrayId(pluginManager);
 
 			if (texArrayId > 0)
@@ -361,13 +383,23 @@ public class ObjModelPlugin extends Plugin
 			int rotation = 0;
 			if (parts.length >= 3)
 			{
-				try { scale = Integer.parseInt(parts[2].trim()); }
-				catch (NumberFormatException ignored) {}
+				try
+				{
+					scale = Integer.parseInt(parts[2].trim());
+				}
+				catch (NumberFormatException ignored)
+				{
+				}
 			}
 			if (parts.length >= 4)
 			{
-				try { rotation = Integer.parseInt(parts[3].trim()); }
-				catch (NumberFormatException ignored) {}
+				try
+				{
+					rotation = Integer.parseInt(parts[3].trim());
+				}
+				catch (NumberFormatException ignored)
+				{
+				}
 			}
 			if (!npcName.isEmpty() && !modelFile.isEmpty())
 			{
@@ -502,13 +534,23 @@ public class ObjModelPlugin extends Plugin
 			int rotation = 0;
 			if (parts.length >= 3)
 			{
-				try { scale = Integer.parseInt(parts[2].trim()); }
-				catch (NumberFormatException ignored) {}
+				try
+				{
+					scale = Integer.parseInt(parts[2].trim());
+				}
+				catch (NumberFormatException ignored)
+				{
+				}
 			}
 			if (parts.length >= 4)
 			{
-				try { rotation = Integer.parseInt(parts[3].trim()); }
-				catch (NumberFormatException ignored) {}
+				try
+				{
+					rotation = Integer.parseInt(parts[3].trim());
+				}
+				catch (NumberFormatException ignored)
+				{
+				}
 			}
 			if (!modelFile.isEmpty())
 			{

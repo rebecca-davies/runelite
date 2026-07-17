@@ -167,13 +167,30 @@ class ObjImporter
 		for (int i = 0; i < tokens.length; i++)
 		{
 			String[] parts = tokens[i].split("/");
-			try { vIndices[i] = Integer.parseInt(parts[0]); vIndices[i] = vIndices[i] > 0 ? vIndices[i] - 1 : vertCount + vIndices[i]; }
-			catch (NumberFormatException e) { return; }
+			try
+			{
+				vIndices[i] = Integer.parseInt(parts[0]);
+				vIndices[i] = vIndices[i] > 0 ? vIndices[i] - 1 : vertCount + vIndices[i];
+			}
+			catch (NumberFormatException e)
+			{
+				return;
+			}
 			uvIndices[i] = -1;
 			if (parts.length > 1 && !parts[1].isEmpty())
 			{
-				try { int idx = Integer.parseInt(parts[1]); uvIndices[i] = idx > 0 ? idx - 1 : uvCount + idx; if (uvIndices[i] < 0 || uvIndices[i] >= uvCount) uvIndices[i] = -1; }
-				catch (NumberFormatException ignored) {}
+				try
+				{
+					int idx = Integer.parseInt(parts[1]);
+					uvIndices[i] = idx > 0 ? idx - 1 : uvCount + idx;
+					if (uvIndices[i] < 0 || uvIndices[i] >= uvCount)
+					{
+						uvIndices[i] = -1;
+					}
+				}
+				catch (NumberFormatException ignored)
+				{
+				}
 			}
 		}
 		for (int i = 1; i < vIndices.length - 1; i++)
@@ -245,13 +262,11 @@ class ObjImporter
 		Arrays.fill(textureCoords, (byte) -1);
 		int[] extTexCoords = new int[fCount];
 		Arrays.fill(extTexCoords, -1);
-		boolean anyTextured = false;
 
 		Map<String, Integer> uvTriangleMap = new HashMap<>();
 		List<float[]> phantomVerts = new ArrayList<>();
 		int numSlots = 0;
 		int solidCount = 0;
-		int overflowCount = 0;
 
 		for (int i = 0; i < fCount; i++)
 		{
@@ -271,7 +286,6 @@ class ObjImporter
 				else
 				{
 					faceTextures[i] = faceTex[i];
-					anyTextured = true;
 				}
 				continue;
 			}
@@ -302,7 +316,6 @@ class ObjImporter
 				else
 				{
 					faceTextures[i] = faceTex[i];
-					anyTextured = true;
 				}
 				continue;
 			}
@@ -332,7 +345,10 @@ class ObjImporter
 			Integer existing = uvTriangleMap.get(key);
 
 			int uvIdx;
-			if (existing != null) { uvIdx = existing; }
+			if (existing != null)
+			{
+				uvIdx = existing;
+			}
 			else
 			{
 				uvIdx = numSlots++;
@@ -345,7 +361,6 @@ class ObjImporter
 			faceTextures[i] = faceTex[i];
 			extTexCoords[i] = uvIdx;
 			if (uvIdx < 255) textureCoords[i] = (byte) uvIdx;
-			anyTextured = true;
 		}
 
 		log.info("ObjModel: UV slots={}, solid-colour faces={}", numSlots, solidCount);

@@ -73,11 +73,6 @@ public class TamaCpu
 	private static final int PIN_K00 = 0;
 	private static final int PIN_K01 = 1;
 	private static final int PIN_K02 = 2;
-	private static final int PIN_K03 = 3;
-	private static final int PIN_K10 = 4;
-	private static final int PIN_K11 = 5;
-	private static final int PIN_K12 = 6;
-	private static final int PIN_K13 = 7;
 
 	// LCD segment position mapping
 	static final int[] SEG_POS = {
@@ -131,17 +126,17 @@ public class TamaCpu
 	private int flags;
 
 	// Memory
-	private int[] memory = new int[MEMORY_SIZE];
+	private final int[] memory = new int[MEMORY_SIZE];
 	private int[] program;
 
 	// HAL
 	private Hal hal;
 
 	// Interrupts
-	private Interrupt[] interrupts = new Interrupt[6];
+	private final Interrupt[] interrupts = new Interrupt[6];
 
 	// Input pins
-	private int[] inputStates = new int[2];
+	private final int[] inputStates = new int[2];
 
 	// Timing
 	private long tickCounter;
@@ -331,18 +326,13 @@ public class TamaCpu
 		ops[n++] = new Op(0xFF4, 0xFFC, 0, 0, 5, 81);       // LD_R_SPL
 
 		// Trim array to actual size
-		ops = java.util.Arrays.copyOf(ops, n);
+		ops = Arrays.copyOf(ops, n);
 	}
 
 	// --- Flag helpers ---
 	private int C()
 	{
 		return (flags & FLAG_C) != 0 ? 1 : 0;
-	}
-
-	private int Z()
-	{
-		return (flags & FLAG_Z) != 0 ? 1 : 0;
 	}
 
 	private int D()
@@ -758,7 +748,7 @@ public class TamaCpu
 		{
 			return hal.getTimestamp();
 		}
-		long deadline = since + ((long) cycles * tsFreq) / ((long) cpuFrequency * speedRatio);
+		long deadline = since + (cycles * tsFreq) / ((long) cpuFrequency * speedRatio);
 		hal.sleepUntil(deadline);
 		return deadline;
 	}
@@ -1353,8 +1343,16 @@ public class TamaCpu
 				tmp = getRq(arg0) + arg1;
 				if (D() != 0)
 				{
-					if (tmp >= 10) { setRq(arg0, (tmp - 10) & 0xF); setC(); }
-					else { setRq(arg0, tmp); clearC(); }
+					if (tmp >= 10)
+					{
+						setRq(arg0, (tmp - 10) & 0xF);
+						setC();
+					}
+					else
+					{
+						setRq(arg0, tmp);
+						clearC();
+					}
 				}
 				else
 				{
@@ -1369,8 +1367,16 @@ public class TamaCpu
 				tmp = getRq(arg0) + getRq(arg1);
 				if (D() != 0)
 				{
-					if (tmp >= 10) { setRq(arg0, (tmp - 10) & 0xF); setC(); }
-					else { setRq(arg0, tmp); clearC(); }
+					if (tmp >= 10)
+					{
+						setRq(arg0, (tmp - 10) & 0xF);
+						setC();
+					}
+					else
+					{
+						setRq(arg0, tmp);
+						clearC();
+					}
 				}
 				else
 				{
@@ -1385,8 +1391,16 @@ public class TamaCpu
 				tmp = getRq(arg0) + arg1 + C();
 				if (D() != 0)
 				{
-					if (tmp >= 10) { setRq(arg0, (tmp - 10) & 0xF); setC(); }
-					else { setRq(arg0, tmp); clearC(); }
+					if (tmp >= 10)
+					{
+						setRq(arg0, (tmp - 10) & 0xF);
+						setC();
+					}
+					else
+					{
+						setRq(arg0, tmp);
+						clearC();
+					}
 				}
 				else
 				{
@@ -1401,8 +1415,16 @@ public class TamaCpu
 				tmp = getRq(arg0) + getRq(arg1) + C();
 				if (D() != 0)
 				{
-					if (tmp >= 10) { setRq(arg0, (tmp - 10) & 0xF); setC(); }
-					else { setRq(arg0, tmp); clearC(); }
+					if (tmp >= 10)
+					{
+						setRq(arg0, (tmp - 10) & 0xF);
+						setC();
+					}
+					else
+					{
+						setRq(arg0, tmp);
+						clearC();
+					}
 				}
 				else
 				{

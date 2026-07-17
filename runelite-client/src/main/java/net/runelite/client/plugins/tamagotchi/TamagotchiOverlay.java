@@ -45,7 +45,7 @@ class TamagotchiOverlay extends Overlay implements KeyListener, MouseListener
 
 	private final boolean[] btnPressed = new boolean[3];
 	private final Rectangle[] iconRects = new Rectangle[8];
-	private Rectangle lcdRect = new Rectangle();
+	private final Rectangle lcdRect = new Rectangle();
 	private BufferedImage bgImage;
 	private boolean bgLoaded;
 	private BufferedImage[] iconImagesOn;
